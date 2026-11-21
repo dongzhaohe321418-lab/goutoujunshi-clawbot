@@ -1,0 +1,19 @@
+{
+  "name": "goutoujunshi-clawbot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24.16 <25"
+  },
+  "scripts": {
+    "start": "node scripts/worker.mjs",
+    "prepare:github": "node scripts/deploy-link.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "openclaw": "2026.11.6",
+    "qrcode": "1.5.4"
+  }
+}

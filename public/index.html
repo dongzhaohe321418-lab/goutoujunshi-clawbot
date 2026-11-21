@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>连接微信 · 狗头军师</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><span class="mark" aria-hidden="true">军</span><strong>狗头军师</strong></header>
+    <section aria-labelledby="title">
+      <h1 id="title">连接微信</h1>
+      <p id="status" role="status" aria-live="polite">正在检查连接…</p>
+      <img id="qr" hidden width="300" height="300" alt="请使用手机微信扫描此绑定二维码">
+      <form id="verify" hidden><label for="pin">手机微信显示的数字</label>
+        <div class="fields"><input id="pin" inputmode="numeric" pattern="[0-9]{1,12}" maxlength="12" autocomplete="off" required>
+          <button type="submit">确认</button></div></form>
+      <button id="action" type="button" hidden></button>
+      <p id="error" role="alert"></p>
+    </section>
+    <footer>可分析你发给微信 ClawBot 的文字和截图。</footer>
+  </main>
+</body>
+</html>

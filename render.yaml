@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: goutoujunshi-clawbot
+    runtime: node
+    plan: standard
+    numInstances: 1
+    buildCommand: npm ci --omit=dev --no-audit --no-fund
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: checksPass
+    disk:
+      name: weixin-state
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "24.22.3"
+      - key: CLAWBOT_DATA_DIR
+        value: /var/data/junshi
+      - key: MODEL_BASE_URL
+        value: https://api.openai.com/v1
+      - key: MODEL_ID
+        sync: false
+      - key: MODEL_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

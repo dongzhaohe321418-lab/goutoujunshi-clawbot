@@ -1,0 +1,21 @@
+:root { color-scheme: light; font: 16px/1.6 Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color:#17312a; background:#f2f5f2; }
+* { box-sizing:border-box }
+body { margin:0; min-height:100svh; display:grid; place-items:center; padding:20px }
+main { width:min(100%,440px); background:#fff; border:1px solid #d5dfd8; border-radius:20px; overflow:hidden; box-shadow:0 8px 32px #244c3810 }
+header,section,footer { padding:22px 32px }
+header { display:flex; gap:12px; align-items:center; border-bottom:1px solid #e4eae6 }
+.mark { background:#18553e; color:white; border-radius:8px; font-weight:700; text-align:center; width:34px; line-height:34px }
+section { min-height:200px }
+h1 { font-size:1.65rem; margin:0; letter-spacing:-.04em }
+p { margin:10px 0; color:#475d52 }
+#qr { max-width:100%; height:auto; margin:16px auto 0; border:1px solid #dce5dd; border-radius:10px; display:block }
+footer { background:#f8faf8; color:#516258; font-size:.84rem }
+form, #action { margin-top:20px }
+.fields { display:flex; gap:10px; margin-top:6px }
+input,button { font:inherit; border-radius:8px; padding:9px 14px }
+input { min-width:0; flex:1; border:1px solid #7c9485 }
+button { background:#18553e; border:0; color:#fff; cursor:pointer }
+button:focus-visible,input:focus-visible { outline:3px solid #349b73; outline-offset:3px }
+button:disabled { opacity:.6 }
+#error { color:#973721 }
+#error:empty,[hidden],#qr[hidden] { display:none }
