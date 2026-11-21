@@ -18,6 +18,10 @@ async function post(route, body = {}) {
 async function refresh() {
   try {
     const res = await fetch('/api/status', { cache: 'no-store' });
+    if (res.status === 401 && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+      el('status').textContent = '请双击「启动本地军师.command」打开已授权的扫码页。';
+      return;
+    }
     if (!res.ok) throw new Error('连接中断，请刷新页面重新登录。');
     const data = await res.json();
     phase = data.phase;
@@ -47,4 +51,16 @@ el('action').addEventListener('click', async () => {
   catch (err) { el('error').textContent = err.message; }
   finally { el('action').disabled = false; }
 });
-refresh();
+async function openBindingPage() {
+  const ticket = new URLSearchParams(location.hash.slice(1)).get('local');
+  if (ticket && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+    history.replaceState(null, '', location.pathname);
+    const res = await fetch('/api/local-session', { method: 'POST', headers: { 'X-ClawBot-Ticket': ticket } });
+    if (!res.ok) {
+      el('status').textContent = '本地登录链接已失效，请重新打开启动器。';
+      return;
+    }
+  }
+  await refresh();
+}
+openBindingPage().catch(() => { el('status').textContent = '连接失败，请重新打开绑定页。'; });

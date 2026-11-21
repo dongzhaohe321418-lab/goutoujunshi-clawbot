@@ -130,10 +130,13 @@ threading.Thread(target=backend.serve_forever,daemon=True).start()
 with socket.socket() as sock:
     sock.bind(('127.0.0.1',0))
     port = sock.getsockname()[1]
+with socket.socket() as sock:
+    sock.bind(('127.0.0.1',0))
+    gateway_port = sock.getsockname()[1]
 web = 'http://127.0.0.1:' + str(port)
 with tempfile.TemporaryDirectory(prefix='junshi-test-') as temp:
     log = Path(temp)/'test.log'
-    env = {**os.environ, 'PORT':str(port),'BIND_ADDRESS':'127.0.0.1','ADMIN_PASSWORD':PASS,
+    env = {**os.environ, 'CLAWBOT_GATEWAY_PORT':str(gateway_port), 'PORT':str(port),'BIND_ADDRESS':'127.0.0.1','ADMIN_PASSWORD':PASS,
            'MODEL_API_KEY':'synthetic-model-key','MODEL_BASE_URL':origin+'/v1','MODEL_ID':'fixture',
            'CLAWBOT_DATA_DIR':temp,'TEST_WEIXIN_ORIGIN':origin,
            'NODE_OPTIONS':'--import='+(ROOT/'test/redirect-login.mjs').as_uri()}
@@ -144,6 +147,7 @@ with tempfile.TemporaryDirectory(prefix='junshi-test-') as temp:
     try:
         wait_for(lambda: status().get('phase') == 'idle', 240)
         assert request('/api/status',auth=False)[0] == 401
+        assert request('/api/local-session',{},auth=False)[0] == 401
         assert request('/api/bind',{},mutation=False)[0] == 403
         assert request('/api/bind',{})[0] == 202
         wait_for(lambda: (status().get('qr') or '').startswith('data:image/png;base64,'))
@@ -157,9 +161,24 @@ with tempfile.TemporaryDirectory(prefix='junshi-test-') as temp:
         assert models[0][1] and models[1][2] and pins == ['654321']
         stop()
         checkpoint = len(cursors)
+        # Restart on loopback using the local launcher's browser-ticket flow.
+        env['CLAWBOT_LOCAL'] = '1'
         proc = launch()
         wait_for(lambda: status()['phase'] == 'online')
         wait_for(lambda: len(cursors) > checkpoint)
+        assert request('/',auth=False)[0] == 200
+        assert request('/api/status',auth=False)[0] == 401
+        ticket_req = Request(web + '/api/local-session',data=b'', headers={'X-ClawBot-Ticket':PASS})
+        with urlopen(ticket_req) as response:
+            cookie = response.headers['Set-Cookie'].split(';')[0]
+        with urlopen(Request(web + '/api/status',headers={'Cookie':cookie})) as response:
+            assert json.load(response)['phase'] == 'online'
+        for headers in [{'Host':'bogus.invalid'}, {'Origin':'https://foreign.invalid'}]:
+            try:
+                urlopen(Request(web + '/api/status',headers={'Cookie':cookie, **headers}))
+                raise AssertionError('foreign host/origin unexpectedly accepted')
+            except HTTPError as err:
+                assert err.code == 403
         assert min(cursors[checkpoint:]) == 3 and qr_requests == 1 and len(drafts) == 2
         assert 'https://fixture.invalid/bind' not in log.read_text()
         print('PASS protected QR, PIN, owner filtering, text/image round trips and restart from saved cursor')

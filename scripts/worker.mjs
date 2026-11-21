@@ -3,9 +3,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import QRCode from 'qrcode';
-import { hasBinding, readSettings, writeConfig } from './settings.mjs';
+import { ensureCodexPlugin, hasBinding, readSettings, writeConfig } from './settings.mjs';
 import { loginOutput } from './login-output.mjs';
 
 process.umask(0o077);
@@ -13,6 +13,10 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const settings = readSettings(process.env, root);
 const hash = value => createHash('sha256').update(value).digest();
 const loginHash = hash('admin:' + process.env.ADMIN_PASSWORD);
+const local = process.env.CLAWBOT_LOCAL === '1';
+const localTicket = hash(process.env.ADMIN_PASSWORD);
+const localSession = local ? randomBytes(32).toString('hex') : null;
+const address = local ? '127.0.0.1' : (process.env.BIND_ADDRESS || '0.0.0.0');
 const childEnv = { ...process.env, OPENCLAW_STATE_DIR: settings.state,
   OPENCLAW_CONFIG_PATH: settings.config, OPENCLAW_OAUTH_DIR: path.join(settings.state, 'credentials') };
 delete childEnv.ADMIN_PASSWORD;
@@ -50,7 +54,7 @@ function startGateway() {
   const probe = async () => {
     if (gateway !== p || stopping) return;
     try {
-      const reply = await fetch('http://127.0.0.1:19637/readyz', { signal: AbortSignal.timeout(1200) });
+      const reply = await fetch('http://127.0.0.1:' + settings.gatewayPort + '/readyz', { signal: AbortSignal.timeout(1200) });
       if (reply.ok && gateway === p && !stopping) { phase = 'online'; return; }
     } catch {}
     if (gateway === p && !stopping) readyTimer = setTimeout(probe, 1500);
@@ -131,13 +135,29 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'; base-uri 'none'");
+  if (local) {
+    const hosts = ['127.0.0.1:' + settings.port, 'localhost:' + settings.port];
+    if (!hosts.includes(req.headers.host)) return send(res, 403, {});
+    if (req.url.startsWith('/api/') && (req.headers['sec-fetch-site'] === 'cross-site' ||
+        (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host))) return send(res, 403, {});
+  }
   if (req.url === '/healthz' && req.method === 'GET') {
     return send(res, phase === 'failed' || phase === 'preparing' ? 503 : 200,
       { status: phase === 'failed' || phase === 'preparing' ? 'unavailable' : 'ok' });
   }
   const auth = req.headers.authorization || '';
   const value = auth.startsWith('Basic ') ? Buffer.from(auth.slice(6), 'base64') : Buffer.alloc(0);
-  if (!timingSafeEqual(hash(value), loginHash)) {
+  if (local && req.method === 'POST' && req.url === '/api/local-session') {
+    const ticket = req.headers['x-clawbot-ticket'];
+    if (typeof ticket !== 'string' || !timingSafeEqual(hash(ticket), localTicket)) return send(res, 403, {});
+    res.setHeader('Set-Cookie', 'junshi=' + localSession + '; HttpOnly; SameSite=Strict; Path=/');
+    return send(res, 200, {});
+  }
+  const publicLocalAsset = local && req.method === 'GET' && staticFiles.has(req.url);
+  const localCookie = local && (req.headers.cookie || '').split(/;\s*/).some(item =>
+    timingSafeEqual(hash(item), hash('junshi=' + localSession)));
+  if (!publicLocalAsset && !localCookie && !timingSafeEqual(hash(value), loginHash)) {
+    if (local) return send(res, 401, { error: '请通过本地启动器打开绑定页' });
     res.setHeader('WWW-Authenticate', 'Basic realm="ClawBot", charset="UTF-8"');
     return send(res, 401, { error: '请输入管理员账号和密码' });
   }
@@ -171,6 +191,9 @@ server.headersTimeout = 15000;
 server.requestTimeout = 15000;
 
 async function prepare() {
+  fs.mkdirSync(settings.state, { recursive: true, mode: 0o700 });
+  if (settings.localCodex) await ensureCodexPlugin(run);
+  if (stopping) return;
   writeConfig(settings);
   let installed;
   try { installed = JSON.parse(await run(['plugins', 'inspect', 'openclaw-weixin', '--json'], true)); } catch {}
@@ -196,7 +219,7 @@ function shutdown() {
 }
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
-server.listen(settings.port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
+server.listen(settings.port, address, () => {
   console.log('微信军师绑定页已启动，端口 ' + settings.port);
   prepare().catch(err => {
     console.error(err.message);
